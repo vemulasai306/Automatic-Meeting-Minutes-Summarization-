@@ -6,6 +6,7 @@ import soundfile as sf
 import speech_recognition as sr
 import streamlit as st
 import string
+import torch
 
 def clean_filename(filename):
     # Simplify the filename by removing special characters and spaces
