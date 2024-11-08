@@ -30,6 +30,8 @@ import streamlit as st
 import string
 import math
 
+import tempfile
+
 def split_audio(audio_file_path, chunk_duration=30):
     """Split audio file into chunks of a given duration in seconds."""
     audio_data, sample_rate = librosa.load(audio_file_path, sr=None)
@@ -37,15 +39,18 @@ def split_audio(audio_file_path, chunk_duration=30):
     num_chunks = math.ceil(audio_length / chunk_duration)
     chunk_paths = []
 
-    for i in range(num_chunks):
-        start_sample = i * chunk_duration * sample_rate
-        end_sample = min((i + 1) * chunk_duration * sample_rate, len(audio_data))
-        chunk_data = audio_data[int(start_sample):int(end_sample)]
-        chunk_path = f"chunk_{i}.wav"
-        sf.write(chunk_path, chunk_data, sample_rate)
-        chunk_paths.append(chunk_path)
+    # Use a temporary directory to store the chunks
+    with tempfile.TemporaryDirectory() as temp_dir:
+        for i in range(num_chunks):
+            start_sample = i * chunk_duration * sample_rate
+            end_sample = min((i + 1) * chunk_duration * sample_rate, len(audio_data))
+            chunk_data = audio_data[int(start_sample):int(end_sample)]
+            chunk_path = os.path.join(temp_dir, f"chunk_{i}.wav")
+            sf.write(chunk_path, chunk_data, sample_rate)
+            chunk_paths.append(chunk_path)
     
     return chunk_paths
+
 
 def transcribe_audio(audio_file):
     recognizer = sr.Recognizer()
