@@ -1,3 +1,5 @@
+
+
 import os
 import librosa
 import soundfile as sf
@@ -5,9 +7,6 @@ import speech_recognition as sr
 import streamlit as st
 import string
 import torch
-from transformers import BartTokenizer, BartForConditionalGeneration
-from fpdf import FPDF
-
 def clean_filename(filename):
     # Simplify the filename by removing special characters and spaces
     valid_chars = "-_.() %s%s" % (string.ascii_letters, string.digits)
@@ -23,26 +22,6 @@ def convert_mp3_to_wav(mp3_file_path, wav_file_path):
     except Exception as e:
         print(f"Conversion failed: {e}")
         return None
-
-def split_audio(audio_path, chunk_duration=30):
-    # Load audio
-    audio, sr = librosa.load(audio_path, sr=None)
-    
-    # Calculate the number of samples per chunk
-    chunk_size = sr * chunk_duration
-    
-    # Split the audio into chunks
-    chunks = [audio[i:i + chunk_size] for i in range(0, len(audio), chunk_size)]
-    
-    return chunks, sr
-
-def save_chunks(chunks, sr, base_filename="chunk"):
-    chunk_files = []
-    for i, chunk in enumerate(chunks):
-        chunk_filename = f"{base_filename}_{i}.wav"
-        sf.write(chunk_filename, chunk, sr)
-        chunk_files.append(chunk_filename)
-    return chunk_files
 
 def transcribe_audio(audio_file):
     recognizer = sr.Recognizer()
@@ -61,29 +40,25 @@ def transcribe_audio(audio_file):
     else:
         wav_file = audio_file  # Use the original file if it's already .wav
 
-    # Split large audio file into smaller chunks
-    chunks, sr = split_audio(wav_file, chunk_duration=30)
-    chunk_files = save_chunks(chunks, sr, base_filename=cleaned_filename)
+    try:
+        # Proceed with transcription
+        with sr.AudioFile(wav_file) as source:
+            audio = recognizer.record(source)
+        text = recognizer.recognize_google(audio)
+        return text
+    except sr.UnknownValueError:
+        st.error("Could not understand the audio")
+        return None
+    except sr.RequestError as e:
+        st.error(f"Request error: {e}")
+        return None
+    finally:
+        # Clean up the temporary wav file only if it was created
+        if wav_file != audio_file and wav_file is not None:
+            os.remove(wav_file)
 
-    # Initialize the full transcribed text
-    full_transcribed_text = ""
 
-    for chunk_file in chunk_files:
-        try:
-            with sr.AudioFile(chunk_file) as source:
-                audio = recognizer.record(source)
-            text = recognizer.recognize_google(audio)
-            full_transcribed_text += text + " "
-        except sr.UnknownValueError:
-            st.error(f"Could not understand the audio in chunk {chunk_file}")
-        except sr.RequestError as e:
-            st.error(f"Request error with chunk {chunk_file}: {e}")
-
-    # Cleanup temporary chunk files
-    for chunk_file in chunk_files:
-        os.remove(chunk_file)
-    
-    return full_transcribed_text.strip()
+from transformers import BartTokenizer, BartForConditionalGeneration
 
 def summarize_text(text):
     # Load pre-trained BART model and tokenizer for summarization
@@ -101,9 +76,13 @@ def summarize_text(text):
 
     return summary
 
+
 def save_summary(summary, filename="meeting_minutes.txt"):
     with open(filename, 'w') as file:
         file.write(summary)
+
+
+from fpdf import FPDF
 
 def save_summary_as_pdf(summary, filename="meeting_minutes.pdf"):
     pdf = FPDF()
@@ -111,6 +90,7 @@ def save_summary_as_pdf(summary, filename="meeting_minutes.pdf"):
     pdf.set_font("Arial", size=12)
     pdf.multi_cell(0, 10, summary)
     pdf.output(filename)
+
 
 def validate_transcription(transcribed_text, original_minutes):
     # Compare the transcribed text with the original minutes
@@ -128,7 +108,7 @@ def validate_transcription(transcribed_text, original_minutes):
     return similarity_score
 
 
-# Streamlit UI
+import streamlit as st
 
 st.title("Automatic Meeting Minutes Summarization Tool")
 
@@ -149,6 +129,5 @@ if audio_file is not None:
         
         # Save summary to file
         save_summary(summary)
-        save_summary_as_pdf(summary)
     else:
         st.error("No Transcription Found. Please try uploading a different audio file.")
