@@ -7,6 +7,20 @@ import speech_recognition as sr
 import streamlit as st
 import string
 
+
+
+import spacy
+from spacy.cli import download
+
+# Try to load the model, if not available, download it
+try:
+    nlp = spacy.load("en_core_web_sm")
+except OSError:
+    print("Downloading 'en_core_web_sm' model...")
+    download("en_core_web_sm")
+    nlp = spacy.load("en_core_web_sm")
+
+
 def clean_filename(filename):
     # Simplify the filename by removing special characters and spaces
     valid_chars = "-_.() %s%s" % (string.ascii_letters, string.digits)
