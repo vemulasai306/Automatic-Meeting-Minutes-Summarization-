@@ -8,4 +8,4 @@ transformers
 scikit-learn
 fpdf
 pydub
-en-core-web-sm
+
