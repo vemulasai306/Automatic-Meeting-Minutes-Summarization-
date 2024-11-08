@@ -8,15 +8,7 @@ import streamlit as st
 import string
 import os
 
-# Check if the model is available
-try:
-    import spacy
-    spacy.load("en_core_web_sm")
-except OSError:
-    print("Downloading 'en_core_web_sm' model...")
-    os.system("python -m spacy download en_core_web_sm")
-    import spacy
-    nlp = spacy.load("en_core_web_sm")
+
 
 
 
