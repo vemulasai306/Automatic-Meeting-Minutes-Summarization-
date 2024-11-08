@@ -1,17 +1,9 @@
-
-
 import os
 import librosa
 import soundfile as sf
 import speech_recognition as sr
 import streamlit as st
 import string
-import os
-
-
-
-
-
 
 def clean_filename(filename):
     # Simplify the filename by removing special characters and spaces
@@ -64,36 +56,6 @@ def transcribe_audio(audio_file):
             os.remove(wav_file)
 
 
-# In[2]:
-
-
-import nltk
-import spacy
-from nltk.corpus import stopwords
-from nltk.tokenize import word_tokenize
-from string import punctuation
-
-# Load spaCy model
-nlp = spacy.load("en_core_web_sm")
-
-# Download NLTK stopwords
-nltk.download('punkt')
-nltk.download('stopwords')
-stop_words = set(stopwords.words('english'))
-
-def preprocess_text(text):
-    # Tokenize and clean text
-    doc = nlp(text.lower())  # Convert text to lowercase
-    tokens = [token.text for token in doc if token.text not in stop_words and token.text not in punctuation]
-    
-    # Reconstruct the cleaned text
-    cleaned_text = ' '.join(tokens)
-    return cleaned_text
-
-
-# In[3]:
-
-
 from transformers import BartTokenizer, BartForConditionalGeneration
 
 def summarize_text(text):
@@ -113,17 +75,9 @@ def summarize_text(text):
     return summary
 
 
-
-
-# In[4]:
-
-
 def save_summary(summary, filename="meeting_minutes.txt"):
     with open(filename, 'w') as file:
         file.write(summary)
-
-
-# In[5]:
 
 
 from fpdf import FPDF
@@ -134,9 +88,6 @@ def save_summary_as_pdf(summary, filename="meeting_minutes.pdf"):
     pdf.set_font("Arial", size=12)
     pdf.multi_cell(0, 10, summary)
     pdf.output(filename)
-
-
-# In[6]:
 
 
 def validate_transcription(transcribed_text, original_minutes):
@@ -155,9 +106,6 @@ def validate_transcription(transcribed_text, original_minutes):
     return similarity_score
 
 
-# In[7]:
-
-
 import streamlit as st
 
 st.title("Automatic Meeting Minutes Summarization Tool")
@@ -171,9 +119,8 @@ if audio_file is not None:
     transcribed_text = transcribe_audio(audio_file)
     
     if transcribed_text is not None:
-        # Only preprocess and summarize if transcription was successful
-        preprocessed_text = preprocess_text(transcribed_text)
-        summary = summarize_text(preprocessed_text)
+        # Directly pass the raw transcription to the summarization function
+        summary = summarize_text(transcribed_text)
         
         # Display summary
         st.write(summary)
@@ -182,8 +129,3 @@ if audio_file is not None:
         save_summary(summary)
     else:
         st.error("No Transcription Found. Please try uploading a different audio file.")
-
-
-
-# In[ ]:
-
