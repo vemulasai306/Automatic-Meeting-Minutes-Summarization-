@@ -1,5 +1,4 @@
 
-
 import os
 import librosa
 import soundfile as sf
@@ -7,6 +6,12 @@ import speech_recognition as sr
 import streamlit as st
 import string
 import torch
+import math
+from transformers import BartTokenizer, BartForConditionalGeneration
+from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.metrics import precision_score, recall_score, f1_score, accuracy_score
+import numpy as np
+
 def clean_filename(filename):
     # Simplify the filename by removing special characters and spaces
     valid_chars = "-_.() %s%s" % (string.ascii_letters, string.digits)
@@ -61,19 +66,11 @@ def transcribe_audio(audio_file):
 from transformers import BartTokenizer, BartForConditionalGeneration
 
 def summarize_text(text):
-    # Load pre-trained BART model and tokenizer for summarization
     tokenizer = BartTokenizer.from_pretrained('facebook/bart-large-cnn')
     model = BartForConditionalGeneration.from_pretrained('facebook/bart-large-cnn')
-
-    # Tokenize the input text
     inputs = tokenizer(text, return_tensors="pt", max_length=1024, truncation=True, padding=True)
-
-    # Get model outputs
-    summary_ids = model.generate(inputs['input_ids'], max_length=150, num_beams=4, early_stopping=True)
-
-    # Decode the token IDs to generate summary text
+    summary_ids = model.generate(inputs['input_ids'], max_length=100, num_beams=6, early_stopping=True, length_penalty=2.0)
     summary = tokenizer.decode(summary_ids[0], skip_special_tokens=True)
-
     return summary
 
 
@@ -92,20 +89,17 @@ def save_summary_as_pdf(summary, filename="meeting_minutes.pdf"):
     pdf.output(filename)
 
 
-def validate_transcription(transcribed_text, original_minutes):
-    # Compare the transcribed text with the original minutes
-    # For simplicity, we can use basic text similarity (Jaccard similarity, Cosine similarity, etc.)
-    from sklearn.feature_extraction.text import CountVectorizer
-    from sklearn.metrics.pairwise import cosine_similarity
-
-    def jaccard_similarity(str1, str2):
-        a = set(str1.split())
-        b = set(str2.split())
-        return len(a.intersection(b)) / len(a.union(b))
-
-    similarity_score = jaccard_similarity(transcribed_text, original_minutes)
-    print(f"Similarity Score: {similarity_score:.2f}")
-    return similarity_score
+def evaluate_summary(transcribed_text, summary_text):
+    vectorizer = CountVectorizer(binary=True, stop_words='english')
+    X = vectorizer.fit_transform([transcribed_text, summary_text])
+    transcribed_vector, summary_vector = X.toarray()
+    
+    precision = precision_score(summary_vector, transcribed_vector)
+    recall = recall_score(summary_vector, transcribed_vector)
+    f1 = f1_score(summary_vector, transcribed_vector)
+    accuracy = np.mean(summary_vector == transcribed_vector)
+    
+    return precision, recall, f1, accuracy
 
 
 import streamlit as st
@@ -129,5 +123,14 @@ if audio_file is not None:
         
         # Save summary to file
         save_summary(summary)
+        
+        # Evaluate summary against transcribed text
+        precision, recall, f1, accuracy = evaluate_summary(transcribed_text, summary)
+        print(precision, recall, f1, accuracy)
+        st.subheader("Evaluation Metrics")
+        st.write(f"Precision: {precision:.2f}")
+        st.write(f"Recall: {recall:.2f}")
+        st.write(f"F1-Score: {f1:.2f}")
+        st.write(f"Accuracy: {accuracy:.2f}")
     else:
         st.error("No Transcription Found. Please try uploading a different audio file.")
