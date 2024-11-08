@@ -1,5 +1,3 @@
-
-
 import os
 import librosa
 import soundfile as sf
@@ -24,6 +22,31 @@ def convert_mp3_to_wav(mp3_file_path, wav_file_path):
         print(f"Conversion failed: {e}")
         return None
 
+import os
+import librosa
+import soundfile as sf
+import speech_recognition as sr
+import streamlit as st
+import string
+import math
+
+def split_audio(audio_file_path, chunk_duration=30):
+    """Split audio file into chunks of a given duration in seconds."""
+    audio_data, sample_rate = librosa.load(audio_file_path, sr=None)
+    audio_length = librosa.get_duration(y=audio_data, sr=sample_rate)
+    num_chunks = math.ceil(audio_length / chunk_duration)
+    chunk_paths = []
+
+    for i in range(num_chunks):
+        start_sample = i * chunk_duration * sample_rate
+        end_sample = min((i + 1) * chunk_duration * sample_rate, len(audio_data))
+        chunk_data = audio_data[int(start_sample):int(end_sample)]
+        chunk_path = f"chunk_{i}.wav"
+        sf.write(chunk_path, chunk_data, sample_rate)
+        chunk_paths.append(chunk_path)
+    
+    return chunk_paths
+
 def transcribe_audio(audio_file):
     recognizer = sr.Recognizer()
     cleaned_filename = clean_filename(audio_file.name)
@@ -41,52 +64,25 @@ def transcribe_audio(audio_file):
     else:
         wav_file = audio_file  # Use the original file if it's already .wav
 
-    try:
-        # Proceed with transcription
-        with sr.AudioFile(wav_file) as source:
+    # Split audio if it's too large
+    chunk_paths = split_audio(wav_file)
+
+    # Transcribe each chunk and combine the results
+    transcribed_text = ""
+    for chunk_path in chunk_paths:
+        with sr.AudioFile(chunk_path) as source:
             audio = recognizer.record(source)
-        text = recognizer.recognize_google(audio)
-        return text
-    except sr.UnknownValueError:
-        st.error("Could not understand the audio")
-        return None
-    except sr.RequestError as e:
-        st.error(f"Request error: {e}")
-        return None
-    finally:
-        # Clean up the temporary wav file only if it was created
-        if wav_file != audio_file and wav_file is not None:
-            os.remove(wav_file)
+        try:
+            text = recognizer.recognize_google(audio)
+            transcribed_text += text + "\n"
+        except sr.UnknownValueError:
+            st.error(f"Could not understand the audio in chunk {chunk_path}")
+        except sr.RequestError as e:
+            st.error(f"Request error while processing chunk {chunk_path}: {e}")
+        finally:
+            os.remove(chunk_path)  # Clean up chunk file
 
-
-# In[2]:
-
-
-import nltk
-import spacy
-from nltk.corpus import stopwords
-from nltk.tokenize import word_tokenize
-from string import punctuation
-
-# Load spaCy model
-nlp = spacy.load("en_core_web_sm")
-
-# Download NLTK stopwords
-nltk.download('punkt')
-nltk.download('stopwords')
-stop_words = set(stopwords.words('english'))
-
-def preprocess_text(text):
-    # Tokenize and clean text
-    doc = nlp(text.lower())  # Convert text to lowercase
-    tokens = [token.text for token in doc if token.text not in stop_words and token.text not in punctuation]
-    
-    # Reconstruct the cleaned text
-    cleaned_text = ' '.join(tokens)
-    return cleaned_text
-
-
-# In[3]:
+    return transcribed_text if transcribed_text else None
 
 
 from transformers import BartTokenizer, BartForConditionalGeneration
@@ -108,17 +104,9 @@ def summarize_text(text):
     return summary
 
 
-
-
-# In[4]:
-
-
 def save_summary(summary, filename="meeting_minutes.txt"):
     with open(filename, 'w') as file:
         file.write(summary)
-
-
-# In[5]:
 
 
 from fpdf import FPDF
@@ -129,9 +117,6 @@ def save_summary_as_pdf(summary, filename="meeting_minutes.pdf"):
     pdf.set_font("Arial", size=12)
     pdf.multi_cell(0, 10, summary)
     pdf.output(filename)
-
-
-# In[6]:
 
 
 def validate_transcription(transcribed_text, original_minutes):
@@ -150,9 +135,6 @@ def validate_transcription(transcribed_text, original_minutes):
     return similarity_score
 
 
-# In[7]:
-
-
 import streamlit as st
 
 st.title("Automatic Meeting Minutes Summarization Tool")
@@ -166,9 +148,8 @@ if audio_file is not None:
     transcribed_text = transcribe_audio(audio_file)
     
     if transcribed_text is not None:
-        # Only preprocess and summarize if transcription was successful
-        preprocessed_text = preprocess_text(transcribed_text)
-        summary = summarize_text(preprocessed_text)
+        # Directly pass the raw transcription to the summarization function
+        summary = summarize_text(transcribed_text)
         
         # Display summary
         st.write(summary)
@@ -177,8 +158,3 @@ if audio_file is not None:
         save_summary(summary)
     else:
         st.error("No Transcription Found. Please try uploading a different audio file.")
-
-
-
-# In[ ]:
-
