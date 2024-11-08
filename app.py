@@ -119,6 +119,7 @@ if audio_file is not None:
         summary = summarize_text(transcribed_text)
         
         # Display summary
+        st.subheader("Summary of Transcription")
         st.write(summary)
         
         # Save summary to file
