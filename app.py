@@ -7,6 +7,9 @@ import speech_recognition as sr
 import streamlit as st
 import string
 import torch
+from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.metrics import precision_score, recall_score, f1_score, accuracy_score
+import numpy as np
 def clean_filename(filename):
     # Simplify the filename by removing special characters and spaces
     valid_chars = "-_.() %s%s" % (string.ascii_letters, string.digits)
