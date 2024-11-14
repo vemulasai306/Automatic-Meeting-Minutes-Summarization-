@@ -81,22 +81,22 @@ def save_summary(summary, filename="meeting_minutes.txt"):
     with open(filename, 'w') as file:
         file.write(summary)
 
-
-from fpdf import FPDF
-
-def save_summary_as_pdf(summary, filename="meeting_minutes.pdf"):
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.set_font("Arial", size=12)
-    pdf.multi_cell(0, 10, summary)
-    pdf.output(filename)
-
-
+# Function to evaluate summary quality
+def evaluate_summary(transcribed_text, summary_text):
+    vectorizer = CountVectorizer(binary=True, stop_words='english')
+    X = vectorizer.fit_transform([transcribed_text, summary_text])
+    transcribed_vector, summary_vector = X.toarray()
+    
+    precision = precision_score(summary_vector, transcribed_vector)
+    recall = recall_score(summary_vector, transcribed_vector)
+    f1 = f1_score(summary_vector, transcribed_vector)
+    accuracy = np.mean(summary_vector == transcribed_vector)
+    
+    return precision, recall, f1, accuracy
 def validate_transcription(transcribed_text, original_minutes):
     # Compare the transcribed text with the original minutes
     # For simplicity, we can use basic text similarity (Jaccard similarity, Cosine similarity, etc.)
-    from sklearn.feature_extraction.text import CountVectorizer
-    from sklearn.metrics.pairwise import cosine_similarity
+    
 
     def jaccard_similarity(str1, str2):
         a = set(str1.split())
@@ -104,31 +104,66 @@ def validate_transcription(transcribed_text, original_minutes):
         return len(a.intersection(b)) / len(a.union(b))
 
     similarity_score = jaccard_similarity(transcribed_text, original_minutes)
-    print(f"Similarity Score: {similarity_score:.2f}")
     return similarity_score
-
 
 import streamlit as st
 
-st.title("Automatic Meeting Minutes Summarization Tool")
+st.title("Automatic Meeting Minutes Summarization and Evaluation Tool")
 
 # File upload
 audio_file = st.file_uploader("Upload Meeting Audio", type=["wav", "mp3"])
 
-# In the Streamlit section where you call transcribe_audio
-if audio_file is not None:
-    # Transcribe and summarize
-    transcribed_text = transcribe_audio(audio_file)
-    
-    if transcribed_text is not None:
-        # Directly pass the raw transcription to the summarization function
-        summary = summarize_text(transcribed_text)
-        
-        # Display summary
-        st.write(summary)
-        
-        # Save summary to file
-        save_summary(summary)
-    else:
-        st.error("No Transcription Found. Please try uploading a different audio file.")
+# Set up session state variables to manage progress
+if 'transcribed_text' not in st.session_state:
+    st.session_state.transcribed_text = None
+if 'summary' not in st.session_state:
+    st.session_state.summary = None
+if 'transcription_done' not in st.session_state:
+    st.session_state.transcription_done = False
+if 'summary_done' not in st.session_state:
+    st.session_state.summary_done = False
 
+# Start processing if an audio file is uploaded
+# Start processing if an audio file is uploaded
+if audio_file is not None:
+    # Perform transcription
+    if not st.session_state.transcription_done:
+        transcribed_text = transcribe_audio(audio_file)
+        
+        # Check if transcription is successful
+        if transcribed_text:
+            st.session_state.transcribed_text = transcribed_text
+            st.session_state.transcription_done = True
+            st.success("Transcription completed successfully. Now performing summarization...")
+        else:
+            st.error("No transcription found. Please try uploading a different audio file.")
+
+    # Perform summarization if transcription is completed
+    if st.session_state.transcription_done and not st.session_state.summary_done:
+        summary = summarize_text(st.session_state.transcribed_text)
+        st.session_state.summary = summary
+        st.session_state.summary_done = True
+        st.success("Summarization completed successfully.")
+
+    # Display summary and evaluation metrics if summarization is done
+    if st.session_state.summary_done:
+        st.subheader("Summary of Transcription")
+        st.write(st.session_state.summary)
+        
+        # Add a download button for the summary
+        st.download_button(
+            label="Download Summary as Text File",
+            data=st.session_state.summary,
+            file_name="summary.txt",
+            mime="text/plain"
+        )
+        
+        # Evaluate summary against transcribed text
+        precision, recall, f1, accuracy = evaluate_summary(st.session_state.transcribed_text, st.session_state.summary)
+        similarity= validate_transcription(st.session_state.transcribed_text, st.session_state.summary)
+        st.subheader("Evaluation Metrics")
+        st.write(f"Precision: {precision:.2f}")
+        st.write(f"Recall: {recall:.2f}")
+        st.write(f"F1-Score: {f1:.2f}")
+        st.write(f"Accuracy: {accuracy:.2f}")
+        st.write(f"Similarity: {similarity:.2f}")
